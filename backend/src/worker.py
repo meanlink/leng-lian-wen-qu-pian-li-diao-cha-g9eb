@@ -6,6 +6,7 @@ from src.config.database import Session
 from src.config.settings import REDIS_URL
 from src.models import Job, Dataset, Report
 from src.services.business import analyze
+from src.services import datasets
 from src.services.reports import deliver
 from src.services.audit import record
 logging.basicConfig(level=logging.INFO)
@@ -16,7 +17,8 @@ def execute(job_id):
         j.status='running'; db.commit()
         try:
             d=db.get(Dataset,j.dataset_id)
-            result=analyze(d.records,j.params)
+            # 大文件批次按批流式读取，避免分析任务把整份记录载入内存。
+            result=analyze(datasets.iter_records(db,d),j.params)
             json.dumps(result,allow_nan=False)
             j.result=result;j.status='completed';j.finished_at=time.time()
             record(db,'worker','job.completed',{'id':j.id})
